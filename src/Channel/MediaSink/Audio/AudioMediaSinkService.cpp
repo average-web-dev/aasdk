@@ -77,6 +77,12 @@ namespace aasdk::channel::mediasink::audio {
       const aap_protobuf::service::media::source::message::Ack &indication,
       SendPromise::Pointer promise) {
     AASDK_LOG_CHANNEL_MEDIA_SINK(debug, "sendMediaAckIndication()");
+    if (messenger_->getProtocolVersion().hasAcklessAudio()) {
+      // From protocol 5.0 on audio is ackless: the phone refuses audio acks as messages of an invalid type
+      // (ProtocolVersion::hasAcklessAudio). The caller's promise is kept, as if the ack had been sent.
+      promise->resolve();
+      return;
+    }
     auto message(std::make_shared<messenger::Message>(channelId_, messenger::EncryptionType::ENCRYPTED,
                                                       messenger::MessageType::SPECIFIC));
     message->insertPayload(

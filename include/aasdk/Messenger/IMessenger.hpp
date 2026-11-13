@@ -22,6 +22,7 @@
 #include <aasdk/Messenger/ICryptor.hpp>
 #include <aasdk/Messenger/Message.hpp>
 #include <aasdk/Messenger/Promise.hpp>
+#include <aasdk/Messenger/ProtocolVersion.hpp>
 
 
 namespace aasdk {
@@ -40,6 +41,14 @@ namespace aasdk {
       virtual void enqueueSend(Message::Pointer message, SendPromise::Pointer promise) = 0;
 
       virtual void stop() = 0;
+
+      // The version the phone selected (ControlServiceChannel sets it from the version response). Kept here
+      // because all channels of a connection share the messenger: the audio sinks read it for ackless audio.
+      // Not pure: other implementations (test fakes in OpenHU) keep compiling and report an unknown version,
+      // with which the channels behave as before.
+      virtual void setProtocolVersion(ProtocolVersion) {}
+
+      virtual ProtocolVersion getProtocolVersion() const { return {}; }
     };
 
   }

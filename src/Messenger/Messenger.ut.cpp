@@ -62,6 +62,29 @@ protected:
     SendPromise::Pointer sendPromise_;
 };
 
+TEST_F(MessengerUnitTest, Messenger_ProtocolVersion)
+{
+    Messenger::Pointer themessenger(std::make_shared<Messenger>(ioService_, messageInStream_, messageOutStream_));
+    EXPECT_FALSE(themessenger->getProtocolVersion().isKnown());
+
+    themessenger->setProtocolVersion(ProtocolVersion{6, 1});
+    EXPECT_EQ(themessenger->getProtocolVersion().majorVersion, 6);
+    EXPECT_EQ(themessenger->getProtocolVersion().minorVersion, 1);
+
+    themessenger->setProtocolVersion(ProtocolVersion{0xFFFF, 0xFFFE});
+    EXPECT_EQ(themessenger->getProtocolVersion().majorVersion, 0xFFFF);
+    EXPECT_EQ(themessenger->getProtocolVersion().minorVersion, 0xFFFE);
+}
+
+TEST(ProtocolVersionUnitTest, AcklessAudioFrom5_0)
+{
+    EXPECT_FALSE(ProtocolVersion{}.hasAcklessAudio());
+    EXPECT_FALSE((ProtocolVersion{1, 7}.hasAcklessAudio()));
+    EXPECT_FALSE((ProtocolVersion{4, 9}.hasAcklessAudio()));
+    EXPECT_TRUE((ProtocolVersion{5, 0}.hasAcklessAudio()));
+    EXPECT_TRUE((ProtocolVersion{6, 1}.hasAcklessAudio()));
+}
+
 TEST_F(MessengerUnitTest, Messenger_Receive)
 {
     Messenger::Pointer themessenger(std::make_shared<Messenger>(ioService_, messageInStream_, messageOutStream_));

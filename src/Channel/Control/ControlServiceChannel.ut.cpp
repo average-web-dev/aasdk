@@ -130,6 +130,22 @@ TEST_F(ControlServiceChannelUnitTest, VersionResponse_UnreadableTrailingBytesIgn
     receive(cVersionResponse, {0x00, 0x01, 0x00, 0x06, 0x00, 0x00, 0xFF, 0xFF});
 }
 
+TEST_F(ControlServiceChannelUnitTest, VersionResponse_SelectedVersionKeptForTheChannels)
+{
+    // the version the phone selected, not the requested one (asked for 5.1, the phone answers 6.1)
+    EXPECT_CALL(*eventHandler_, onVersionResponse(6, 1, aap_protobuf::shared::MessageStatus::STATUS_SUCCESS));
+    receive(cVersionResponse, {0x00, 0x06, 0x00, 0x01, 0x00, 0x00});
+    EXPECT_EQ(messenger_->protocolVersion.majorVersion, 6);
+    EXPECT_EQ(messenger_->protocolVersion.minorVersion, 1);
+}
+
+TEST_F(ControlServiceChannelUnitTest, VersionResponse_NoCompatibleVersionNotKept)
+{
+    EXPECT_CALL(*eventHandler_, onVersionResponse(6, 1, aap_protobuf::shared::MessageStatus::STATUS_NO_COMPATIBLE_VERSION));
+    receive(cVersionResponse, {0x00, 0x06, 0x00, 0x01, 0xFF, 0xFF});
+    EXPECT_FALSE(messenger_->protocolVersion.isKnown());
+}
+
 TEST_F(ControlServiceChannelUnitTest, VersionResponse_TooShort)
 {
     for(size_t size = 0; size < 6; ++size)
@@ -204,6 +220,7 @@ TEST_F(ControlServiceChannelUnitTest, VersionResponse_SecondOneIgnored)
     receive(cVersionResponse, {0x00, 0x01, 0x00, 0x07, 0x00, 0x00});
     // a late answer to an earlier request: no second handshake, the channel keeps receiving
     receiveAndRearm(cVersionResponse, {0x00, 0x01, 0x00, 0x06, 0x00, 0x00});
+    EXPECT_EQ(messenger_->protocolVersion.minorVersion, 7);
 }
 
 TEST_F(ControlServiceChannelUnitTest, Notifications_PassedOnAndChannelKeepsReceiving)

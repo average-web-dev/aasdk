@@ -29,6 +29,15 @@ namespace aasdk::messenger {
 
   }
 
+  void Messenger::setProtocolVersion(ProtocolVersion version) {
+    protocolVersion_ = static_cast<uint32_t>(version.majorVersion) << 16 | version.minorVersion;
+  }
+
+  ProtocolVersion Messenger::getProtocolVersion() const {
+    const uint32_t value = protocolVersion_;
+    return ProtocolVersion{static_cast<uint16_t>(value >> 16), static_cast<uint16_t>(value & 0xFFFF)};
+  }
+
   void Messenger::enqueueReceive(ChannelId channelId, ReceivePromise::Pointer promise) {
     AASDK_LOG(debug) << "[Messenger::enqueueReceive] Called on channel " << channelIdToString(channelId);
 
