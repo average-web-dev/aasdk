@@ -397,6 +397,15 @@ namespace aasdk {
           }
         }
 
+        if (status != aap_protobuf::shared::MessageStatus::STATUS_NO_COMPATIBLE_VERSION) {
+          const messenger::ProtocolVersion version{major, minor};
+          messenger_->setProtocolVersion(version);
+          if (version.hasAcklessAudio()) {
+            AASDK_LOG(info) << "[ControlServiceChannel] protocol " << major << "." << minor
+                            << ": ackless audio, the audio sinks send no media acks";
+          }
+        }
+
         eventHandler->onVersionResponse(major, minor, status);
       }
 

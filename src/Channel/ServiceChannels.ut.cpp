@@ -35,6 +35,7 @@
 #include <aap_protobuf/service/carcontrol/message/VehiclePropertyId.pb.h>
 #include <aap_protobuf/service/radio/RadioMessageId.pb.h>
 #include <aap_protobuf/service/media/sink/MediaMessageId.pb.h>
+#include <aap_protobuf/service/media/source/message/Ack.pb.h>
 #include <aap_protobuf/service/sensorsource/SensorMessageId.pb.h>
 #include <aap_protobuf/service/inputsource/InputMessageId.pb.h>
 #include <aap_protobuf/service/navigationstatus/NavigationStatusMessageId.pb.h>
@@ -248,6 +249,72 @@ TEST_F(ServiceChannelsUnitTest, Audio_UnderflowNotification)
     notification.set_session_id(1);
     EXPECT_EQ(sentId([&](auto p) { audio->sendAudioUnderflowNotification(notification, std::move(p)); }),
               pb::media::sink::MediaMessageId::MEDIA_MESSAGE_AUDIO_UNDERFLOW_NOTIFICATION);
+}
+
+// Media acks (L-AA-13): from protocol 5.0 on audio is ackless, the phone refuses audio acks
+namespace
+{
+pb::media::source::message::Ack mediaAck(int32_t session)
+{
+    pb::media::source::message::Ack ack;
+    ack.set_session_id(session);
+    ack.set_ack(1);
+    return ack;
+}
+}
+
+TEST_F(ServiceChannelsUnitTest, Audio_NoMediaAckFromProtocol5)
+{
+    messenger_->setProtocolVersion(messenger::ProtocolVersion{6, 1});
+    for(const auto channel: {messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO, messenger::ChannelId::MEDIA_SINK_GUIDANCE_AUDIO,
+                             messenger::ChannelId::MEDIA_SINK_SYSTEM_AUDIO, messenger::ChannelId::MEDIA_SINK_TELEPHONY_AUDIO})
+    {
+        SCOPED_TRACE(messenger::channelIdToString(channel));
+        auto audio = std::make_shared<mediasink::audio::AudioMediaSinkService>(strand_, messenger_, channel);
+        EXPECT_CALL(*messenger_, enqueueSend(_, _)).Times(0);
+        bool resolved = false;
+        auto promise = SendPromise::defer(ioService_);
+        promise->then([&resolved]() { resolved = true; }, [](const error::Error&) { ADD_FAILURE() << "ack rejected"; });
+        audio->sendMediaAckIndication(mediaAck(2), std::move(promise));
+        ioService_.run();
+        ioService_.restart();
+        // the caller sees the ack as done
+        EXPECT_TRUE(resolved);
+        testing::Mock::VerifyAndClearExpectations(messenger_.get());
+    }
+}
+
+TEST_F(ServiceChannelsUnitTest, Audio_MediaAckWithSessionBelowProtocol5)
+{
+    messenger_->setProtocolVersion(messenger::ProtocolVersion{1, 7});
+    auto audio = std::make_shared<mediasink::audio::AudioMediaSinkService>(strand_, messenger_, messenger::ChannelId::MEDIA_SINK_GUIDANCE_AUDIO);
+    common::Data payload;
+    EXPECT_EQ(sentId([&](auto p) { audio->sendMediaAckIndication(mediaAck(3), std::move(p)); }, &payload),
+              pb::media::sink::MediaMessageId::MEDIA_MESSAGE_ACK);
+    // the session id of the phone's last Start, as the caller passes it
+    EXPECT_EQ(payload, (common::Data{0x08, 0x03, 0x10, 0x01}));
+}
+
+TEST_F(ServiceChannelsUnitTest, Audio_MediaAckBeforeVersionResponse)
+{
+    // unknown version (0.0): acks are sent as before
+    auto audio = std::make_shared<mediasink::audio::AudioMediaSinkService>(strand_, messenger_, messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO);
+    EXPECT_EQ(sentId([&](auto p) { audio->sendMediaAckIndication(mediaAck(0), std::move(p)); }),
+              pb::media::sink::MediaMessageId::MEDIA_MESSAGE_ACK);
+}
+
+TEST_F(ServiceChannelsUnitTest, Video_MediaAckAtEveryProtocolVersion)
+{
+    auto video = std::make_shared<mediasink::video::VideoMediaSinkService>(strand_, messenger_, messenger::ChannelId::MEDIA_SINK_VIDEO);
+    for(const auto version: {messenger::ProtocolVersion{1, 7}, messenger::ProtocolVersion{6, 1}})
+    {
+        SCOPED_TRACE(version.majorVersion);
+        messenger_->setProtocolVersion(version);
+        common::Data payload;
+        EXPECT_EQ(sentId([&](auto p) { video->sendMediaAckIndication(mediaAck(1), std::move(p)); }, &payload),
+                  pb::media::sink::MediaMessageId::MEDIA_MESSAGE_ACK);
+        EXPECT_EQ(payload, (common::Data{0x08, 0x01, 0x10, 0x01}));
+    }
 }
 
 TEST_F(ServiceChannelsUnitTest, Sensor_Error)

@@ -18,6 +18,7 @@
 #pragma once
 
 #include <boost/asio.hpp>
+#include <atomic>
 #include <list>
 #include <aasdk/Messenger/IMessenger.hpp>
 #include <aasdk/Messenger/IMessageInStream.hpp>
@@ -39,6 +40,10 @@ namespace aasdk {
       void enqueueSend(Message::Pointer message, SendPromise::Pointer promise) override;
 
       void stop() override;
+
+      void setProtocolVersion(ProtocolVersion version) override;
+
+      ProtocolVersion getProtocolVersion() const override;
 
     private:
       using std::enable_shared_from_this<Messenger>::shared_from_this;
@@ -67,6 +72,8 @@ namespace aasdk {
       ChannelSendQueue channelSendPromiseQueue_;
       // A receive of messageInStream_ is running (the promise queue counts channels, not promises)
       bool inStreamReceiving_ = false;
+      // major << 16 | minor; set on the control channel's strand, read on the other channels' strands
+      std::atomic<uint32_t> protocolVersion_{0};
 
     };
 
